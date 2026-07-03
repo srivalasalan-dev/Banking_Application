@@ -1,0 +1,263 @@
+{
+  "info": {
+    "name": "Banking Microservices",
+    "_postman_id": "b1a1f9a0-4e3a-4b1a-9c2e-3f5a2c1d9e10",
+    "description": "Collection covering all REST APIs found in auth-service, customer-service, account-service and transaction-service. eureka-server exposes no REST API (dashboard UI only) and api-gateway currently has no route configuration (see notes in the chat response) so requests are pointed directly at each service's own port. Update {{base_url_*}} variables or switch to {{gateway_url}} once routes are added.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{jwt_token}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "gateway_url", "value": "http://localhost:8080", "type": "string", "description": "api-gateway — NOT currently usable, no routes are configured" },
+    { "key": "base_url_auth", "value": "http://localhost:8081", "type": "string" },
+    { "key": "base_url_customer", "value": "http://localhost:8082", "type": "string" },
+    { "key": "base_url_account", "value": "http://localhost:8083", "type": "string" },
+    { "key": "base_url_transaction", "value": "http://localhost:8084", "type": "string" },
+    { "key": "jwt_token", "value": "", "type": "string" },
+    { "key": "customer_id", "value": "1", "type": "string" },
+    { "key": "account_number", "value": "1001", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Auth Service",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john.doe@example.com\",\n  \"phone\": \"9876543210\",\n  \"password\": \"secret123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url_auth}}/auth/register",
+              "host": [ "{{base_url_auth}}" ],
+              "path": [ "auth", "register" ]
+            },
+            "description": "Creates a new user. Validation: name not blank, valid email, phone exactly 10 digits, password min 6 characters."
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.token) {",
+                  "    pm.collectionVariables.set('jwt_token', body.token);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john.doe@example.com\",\n  \"password\": \"secret123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url_auth}}/auth/login",
+              "host": [ "{{base_url_auth}}" ],
+              "path": [ "auth", "login" ]
+            },
+            "description": "Authenticates a user and returns a JWT token. The test script auto-saves the returned token into {{jwt_token}} for reuse by other requests. NOTE: auth-service is the only service with Spring Security configured — account, customer and transaction services currently accept requests without any token check (see notes)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Customer Service",
+      "item": [
+        {
+          "name": "Get Customer By Id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_customer}}/customers/{{customer_id}}",
+              "host": [ "{{base_url_customer}}" ],
+              "path": [ "customers", "{{customer_id}}" ]
+            }
+          }
+        },
+        {
+          "name": "Get All Customers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_customer}}/customers",
+              "host": [ "{{base_url_customer}}" ],
+              "path": [ "customers" ]
+            }
+          }
+        },
+        {
+          "name": "Update Customer",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john.doe@example.com\",\n  \"phone\": \"9876543210\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url_customer}}/customers/{{customer_id}}",
+              "host": [ "{{base_url_customer}}" ],
+              "path": [ "customers", "{{customer_id}}" ]
+            }
+          }
+        },
+        {
+          "name": "Delete Customer",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_customer}}/customers/{{customer_id}}",
+              "host": [ "{{base_url_customer}}" ],
+              "path": [ "customers", "{{customer_id}}" ]
+            }
+          }
+        },
+        {
+          "name": "Search Customer By Email",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_customer}}/customers/search?email=john.doe@example.com",
+              "host": [ "{{base_url_customer}}" ],
+              "path": [ "customers", "search" ],
+              "query": [ { "key": "email", "value": "john.doe@example.com" } ]
+            },
+            "description": "NOTE: this shares the '/customers/{id}' pattern with Get Customer By Id. Spring will still route '/customers/search' to this exact-match endpoint correctly, but keep this in mind if paths are ever refactored."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Account Service",
+      "item": [
+        {
+          "name": "Create Account",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": {{customer_id}},\n  \"accountType\": \"SAVINGS\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url_account}}/accounts",
+              "host": [ "{{base_url_account}}" ],
+              "path": [ "accounts" ]
+            }
+          }
+        },
+        {
+          "name": "Deposit",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountNumber\": {{account_number}},\n  \"amount\": 500.00\n}"
+            },
+            "url": {
+              "raw": "{{base_url_account}}/accounts/deposit",
+              "host": [ "{{base_url_account}}" ],
+              "path": [ "accounts", "deposit" ]
+            }
+          }
+        },
+        {
+          "name": "Withdraw",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountNumber\": {{account_number}},\n  \"amount\": 100.00\n}"
+            },
+            "url": {
+              "raw": "{{base_url_account}}/accounts/withdraw",
+              "host": [ "{{base_url_account}}" ],
+              "path": [ "accounts", "withdraw" ]
+            }
+          }
+        },
+        {
+          "name": "Get Balance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_account}}/accounts/balance/{{account_number}}",
+              "host": [ "{{base_url_account}}" ],
+              "path": [ "accounts", "balance", "{{account_number}}" ]
+            }
+          }
+        },
+        {
+          "name": "Search Account",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_account}}/accounts/search/{{account_number}}",
+              "host": [ "{{base_url_account}}" ],
+              "path": [ "accounts", "search", "{{account_number}}" ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transaction Service",
+      "item": [
+        {
+          "name": "Transfer",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fromAccount\": {{account_number}},\n  \"toAccount\": 1002,\n  \"amount\": 250.00\n}"
+            },
+            "url": {
+              "raw": "{{base_url_transaction}}/transactions/transfer",
+              "host": [ "{{base_url_transaction}}" ],
+              "path": [ "transactions", "transfer" ]
+            }
+          }
+        },
+        {
+          "name": "Transaction History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_transaction}}/transactions/{{account_number}}",
+              "host": [ "{{base_url_transaction}}" ],
+              "path": [ "transactions", "{{account_number}}" ]
+            },
+            "description": "NOTE: transaction-service exposes only 'transfer' and 'history'. It has DepositRequest/WithdrawRequest DTOs in its source but no controller endpoints use them — deposit/withdraw only exist in account-service."
+          }
+        }
+      ]
+    }
+  ]
+}
