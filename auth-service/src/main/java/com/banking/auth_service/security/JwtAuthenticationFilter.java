@@ -1,6 +1,7 @@
 package com.banking.auth_service.security;
 
 import com.banking.auth_service.util.JwtService;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -44,29 +45,38 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String jwt=authHeader.substring(7);
 
-        String username=jwtService.extractUsername(jwt);
+        try {
 
-        if(username!=null &&
-                SecurityContextHolder.getContext().getAuthentication()==null){
+            String username=jwtService.extractUsername(jwt);
 
-            UserDetails userDetails=userDetailsService.loadUserByUsername(username);
+            if(username!=null &&
+                    SecurityContextHolder.getContext().getAuthentication()==null){
 
-            if(jwtService.isTokenValid(jwt,userDetails)){
+                UserDetails userDetails=userDetailsService.loadUserByUsername(username);
 
-                UsernamePasswordAuthenticationToken token=
-                        new UsernamePasswordAuthenticationToken(
-                                userDetails,
-                                null,
-                                userDetails.getAuthorities());
+                if(jwtService.isTokenValid(jwt,userDetails)){
 
-                token.setDetails(
-                        new WebAuthenticationDetailsSource()
-                                .buildDetails(request));
+                    UsernamePasswordAuthenticationToken token=
+                            new UsernamePasswordAuthenticationToken(
+                                    userDetails,
+                                    null,
+                                    userDetails.getAuthorities());
 
-                SecurityContextHolder.getContext()
-                        .setAuthentication(token);
+                    token.setDetails(
+                            new WebAuthenticationDetailsSource()
+                                    .buildDetails(request));
+
+                    SecurityContextHolder.getContext()
+                            .setAuthentication(token);
+
+                }
 
             }
+
+        } catch (JwtException | IllegalArgumentException ex) {
+
+            
+            SecurityContextHolder.clearContext();
 
         }
 
