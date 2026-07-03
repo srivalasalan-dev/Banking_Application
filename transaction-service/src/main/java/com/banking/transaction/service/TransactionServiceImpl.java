@@ -4,6 +4,7 @@ import com.banking.transaction.client.AccountClient;
 import com.banking.transaction.dto.request.*;
 import com.banking.transaction.dto.response.TransactionResponse;
 import com.banking.transaction.entity.Transaction;
+import com.banking.transaction.exception.TransactionFailedException;
 import com.banking.transaction.repository.TransactionRepository;
 import com.banking.transaction.service.TransactionService;
 import lombok.RequiredArgsConstructor;
@@ -11,7 +12,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.concurrent.*;
 
 @Service
 @RequiredArgsConstructor
@@ -24,9 +24,8 @@ public class TransactionServiceImpl implements TransactionService {
     @Override
     public TransactionResponse transfer(TransferRequest request) {
 
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-
-        Callable<Boolean> withdrawTask = () -> {
+      
+        try {
 
             WithdrawRequest withdraw = new WithdrawRequest();
 
@@ -36,11 +35,16 @@ public class TransactionServiceImpl implements TransactionService {
 
             accountClient.withdraw(withdraw);
 
-            return true;
+        } catch (Exception e) {
 
-        };
+            throw new TransactionFailedException(
+                    "Transfer failed while withdrawing from account "
+                            + request.getFromAccount() + ": " + e.getMessage());
 
-        Callable<Boolean> depositTask = () -> {
+        }
+
+      
+        try {
 
             DepositRequest deposit = new DepositRequest();
 
@@ -50,27 +54,9 @@ public class TransactionServiceImpl implements TransactionService {
 
             accountClient.deposit(deposit);
 
-            return true;
+        } catch (Exception depositEx) {
 
-        };
-
-        try {
-
-            Future<Boolean> withdrawFuture = executor.submit(withdrawTask);
-
-            withdrawFuture.get();
-
-            Future<Boolean> depositFuture = executor.submit(depositTask);
-
-            depositFuture.get();
-
-        } catch (Exception e) {
-
-            throw new RuntimeException(e);
-
-        } finally {
-
-            executor.shutdown();
+            return handleDepositFailure(request, depositEx);
 
         }
 
@@ -86,6 +72,58 @@ public class TransactionServiceImpl implements TransactionService {
         repository.save(transaction);
 
         return map(transaction);
+
+    }
+
+  
+    private TransactionResponse handleDepositFailure(TransferRequest request, Exception depositEx) {
+
+        try {
+
+            DepositRequest refund = new DepositRequest();
+
+            refund.setAccountNumber(request.getFromAccount());
+
+            refund.setAmount(request.getAmount());
+
+            accountClient.deposit(refund);
+
+        } catch (Exception refundEx) {
+
+            Transaction failed = Transaction.builder()
+                    .fromAccount(request.getFromAccount())
+                    .toAccount(request.getToAccount())
+                    .amount(request.getAmount())
+                    .type("TRANSFER")
+                    .status("FAILED_UNRECOVERABLE")
+                    .transactionDate(LocalDateTime.now())
+                    .build();
+
+            repository.save(failed);
+
+            throw new TransactionFailedException(
+                    "Transfer failed and the automatic refund also failed - manual reconciliation "
+                            + "is required for account " + request.getFromAccount()
+                            + ". Deposit error: " + depositEx.getMessage()
+                            + " | Refund error: " + refundEx.getMessage());
+
+        }
+
+        Transaction failed = Transaction.builder()
+                .fromAccount(request.getFromAccount())
+                .toAccount(request.getToAccount())
+                .amount(request.getAmount())
+                .type("TRANSFER")
+                .status("FAILED_REFUNDED")
+                .transactionDate(LocalDateTime.now())
+                .build();
+
+        repository.save(failed);
+
+        throw new TransactionFailedException(
+                "Transfer failed while depositing to account " + request.getToAccount()
+                        + " and has been refunded to account " + request.getFromAccount()
+                        + ": " + depositEx.getMessage());
 
     }
 
