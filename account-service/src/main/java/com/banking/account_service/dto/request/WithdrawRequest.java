@@ -11,7 +11,7 @@ public class WithdrawRequest {
     private Long accountNumber;
 
     @NotNull
-    @Positive(message = "Amount must be greater than zero")
+    @Positive(message = "Amount must be greater than 0")
     private Double amount;
 
 }
